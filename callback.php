@@ -2,7 +2,7 @@
 
 $_GET['fuse'] = 'billing';
 $_GET['action'] = 'gatewaycallback';
-$_GET['plugin'] = 'bitpay';
+$_GET['plugin'] = 'bitpayv2';
 
 chdir('../../..');
 

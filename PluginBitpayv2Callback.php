@@ -5,7 +5,7 @@ require_once 'modules/billing/models/class.gateway.plugin.php';
 require_once 'modules/billing/models/Invoice_EventLog.php';
 require_once 'modules/admin/models/Error_EventLog.php';
 
-class PluginBitpayCallback extends PluginCallback
+class PluginBitpayv2Callback extends PluginCallback
 {
 
     function processCallback()
@@ -13,27 +13,27 @@ class PluginBitpayCallback extends PluginCallback
         $data = file_get_contents("php://input");
         $json = json_decode($data, true);
         CE_Lib::log(4, "Callback: ". print_r($json, true));
-        $bpInvoiceId = $json['id'];
+        $bpInvoiceId = $json['data']['id'];
         $invoiceData = $this->getInvoice($bpInvoiceId);
 
-        $cPlugin = new Plugin($invoiceData['posData'], "bitpay", $this->user);
-        $cPlugin->setAmount($invoiceData['price']);
+        $cPlugin = new Plugin($invoiceData['data']['posData'], "bitpayv2", $this->user);
+        $cPlugin->setAmount($invoiceData['data']['price']);
         $cPlugin->setAction('charge');
 
-        switch ($invoiceData['status']) {
+        switch ($invoiceData['data']['status']) {
             case 'paid':
-                $transaction = "BitPay payment of {$invoiceData['price']} has been received.";
+                $transaction = "BitPay payment of {$invoiceData['data']['price']} has been received.";
                 $cPlugin->PaymentPending($transaction, $bpInvoiceId);
                 break;
 
             case 'confirmed':
-                $transaction = "BitPay payment of {$invoiceData['price']} has been confirmed.";
+                $transaction = "BitPay payment of {$invoiceData['data']['price']} has been confirmed.";
                 $cPlugin->PaymentPending($transaction, $bpInvoiceId);
                 break;
 
             case 'complete':
-                $transaction = "BitPay payment of {$invoiceData['price']} has been completed.";
-                $cPlugin->PaymentAccepted($invoiceData['price'], $transaction, $bpInvoiceId);
+                $transaction = "BitPay payment of {$invoiceData['data']['price']} has been completed.";
+                $cPlugin->PaymentAccepted($invoiceData['data']['price'], $transaction, $bpInvoiceId);
                 break;
 
             case 'expired':
@@ -46,26 +46,28 @@ class PluginBitpayCallback extends PluginCallback
 
     private function getInvoice($invoiceId)
     {
-        $url = 'https://bitpay.com/api/invoice/';
-        if ($this->settings->get('plugin_bitpay_Use Testing Environment?') == '1') {
-            $url = 'https://test.bitpay.com/api/invoice/';
+        $url = 'https://bitpay.com/invoices/';
+        if ($this->settings->get('plugin_bitpayv2_Use Testing Environment?') == '1') {
+            $url = 'https://test.bitpay.com/invoices/';
         }
 
         $url .= $invoiceId;
+        $url .= "?" . $this->settings->get('plugin_bitpayv2_API Key');
 
         $ch = curl_init($url);
 
         $header = [
             'Content-Type: application/json',
-            'Authorization: Basic ' . base64_encode($this->settings->get('plugin_bitpay_Legacy API Key')),
+            'X-Accept-Version: 2.0.0',
         ];
+
         curl_setopt($ch, CURLOPT_HTTPHEADER, $header);
         curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 
         $response = curl_exec($ch);
         if (!$response) {
-            throw new CE_Exception('cURL BitPay Error: ' . curl_error($ch) . '( ' .curl_errno($ch) . ')');
+            throw new CE_Exception('cURL BitPayv2 Error: ' . curl_error($ch) . '( ' .curl_errno($ch) . ')');
         }
         curl_close($ch);
         $response = json_decode($response, true);
